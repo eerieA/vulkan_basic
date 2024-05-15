@@ -1,29 +1,23 @@
-#include <iostream>
-#include <vulkan/vulkan.h>
+#include <cstdlib>
 #include <cstdint>
 #include <cmath>
+#include <vulkan/vulkan.h>
+#include <gsl/gsl>
+#include <GLFW/glfw3.h>
+#include <iostream>
 
-int main(std::int32_t argc, char** argv) {
-    std::uint32_t count = 0;
-    std::size_t size = 12;
-    std::float_t s = 0.0f;
+#include <glfw_initialization.h>
 
-    VkApplicationInfo appInfo = {};
-    appInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
-    appInfo.apiVersion = VK_API_VERSION_1_0;
-    appInfo.pApplicationName = "Test app";
-    appInfo.pEngineName = "Test engine";
+std::int32_t main(std::int32_t argc, gsl::zstring* argv) {
 
-    VkInstanceCreateInfo instanceInfo = {};
-    instanceInfo.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
-    instanceInfo.pApplicationInfo = &appInfo;
+    veng::GlfwInitialization _glfw;
 
-    VkInstance instance;
+    gsl::not_null<GLFWwindow*> window = glfwCreateWindow(800, 600, "Vulkan Engine", nullptr, nullptr);
+    gsl::final_action _cleanup_window([window]() { glfwDestroyWindow(window); });
 
-    VkResult result = vkCreateInstance(&instanceInfo, 0, &instance);
-    if (result == VK_SUCCESS) {
-        std::cout << "Creation was successful." << std::endl;
+    while (!glfwWindowShouldClose(window)) {
+        glfwPollEvents();
     }
-    
-    return 0;
+
+    return EXIT_SUCCESS;
 }

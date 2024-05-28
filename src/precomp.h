@@ -7,4 +7,3 @@
 #include <string>
 #include <string_view>
 #include <glm/glm.hpp>
-#include <vulkan/vulkan.h>

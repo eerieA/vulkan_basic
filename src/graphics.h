@@ -1,5 +1,6 @@
 #pragma once
 
+#include <vector>
 #include <vulkan/vulkan.h>
 #include <glfw_window.h>
 
@@ -14,7 +15,9 @@ class Graphics final {
 
     void InitializeVulkan();
     void CreateInstance();
-    gsl::span<gsl::czstring> GetSuggestedExtensions();
+
+    static gsl::span<gsl::czstring> GetSuggestedInstanceExtensions();
+    static std::vector<VkExtensionProperties> GetSupportedInstanceExtensions();
 
     VkInstance instance_ = nullptr;
     gsl::not_null<Window*> window_;

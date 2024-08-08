@@ -2,6 +2,36 @@
 #include <graphics.h>
 #include <GLFW/glfw3.h>
 #include <iostream>
+#include <spdlog/spdlog.h>
+
+VKAPI_ATTR VkResult VKAPI_CALL vkCreateDebugUtilsMessengerEXT(
+    VkInstance instance,
+    const VkDebugUtilsMessengerCreateInfoEXT* info,
+    const VkAllocationCallbacks* allocator,
+    VkDebugUtilsMessengerEXT* debug_messenger
+) {
+    PFN_vkCreateDebugUtilsMessengerEXT function =
+        reinterpret_cast<PFN_vkCreateDebugUtilsMessengerEXT>(vkGetInstanceProcAddr(instance, "vkCreateDebugUtilsMessengerEXT"));
+
+    if (function != nullptr) {
+        return function(instance, info, allocator, debug_messenger);
+    } else {
+        return VK_ERROR_EXTENSION_NOT_PRESENT;
+    }
+}
+
+VKAPI_ATTR void VKAPI_CALL vkDestroyDebugUtilsMessengerEXT(
+    VkInstance instance,
+    VkDebugUtilsMessengerEXT debug_messenger,
+    const VkAllocationCallbacks* allocator
+) {
+    PFN_vkDestroyDebugUtilsMessengerEXT function =
+        reinterpret_cast<PFN_vkDestroyDebugUtilsMessengerEXT>(vkGetInstanceProcAddr(instance, "vkDestroyDebugUtilsMessengerEXT"));
+
+    if (function != nullptr) {
+        function(instance, debug_messenger, allocator);
+    }
+}
 
 namespace veng {
 
@@ -11,10 +41,10 @@ namespace veng {
         const VkDebugUtilsMessengerCallbackDataEXT* callback_data,
         void* user_data
     ) {
-        if(severity >= VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT) {
-            std::cerr << "Validation Error:" << callback_data->pMessage << std::endl;
+        if(severity == VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT) {
+            spdlog::warn("Vulkan Validation: {}", callback_data->pMessage);
         } else {
-            std::cout << "Validation Message:" << callback_data->pMessage << std::endl;
+            spdlog::error("Vulkan Error: {}", callback_data->pMessage);
         }
         return VK_FALSE;
     }
@@ -24,8 +54,7 @@ namespace veng {
         creation_info.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
 
         creation_info.messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT |
-                                        VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT |
-                                        VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT;
+                                        VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
         
         creation_info.messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT |
                                     VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT;
@@ -44,14 +73,22 @@ namespace veng {
 
         InitializeVulkan();
     }
+
     Graphics::~Graphics(){
         if (instance_ != nullptr) {
+
+            // Destroy extensions before destroying the overall VkInstance
+            if (debug_messenger_ != nullptr) {
+                vkDestroyDebugUtilsMessengerEXT(instance_, debug_messenger_, nullptr);
+            }
+
             vkDestroyInstance(instance_, nullptr);
-        }        
+        }
     }
 
     void Graphics::InitializeVulkan() {
         CreateInstance();
+        SetupDebugMessenger();
     }
 
     void Graphics::CreateInstance() {
@@ -93,8 +130,21 @@ namespace veng {
         if (result != VK_SUCCESS) {
             std::exit(EXIT_FAILURE);
         }
-    }
+    }    
     
+    void Graphics::SetupDebugMessenger() {
+        if (!validation_enabled_) {
+            return;
+        }
+
+        VkDebugUtilsMessengerCreateInfoEXT info = GetCreateMessengerInfo();
+        VkResult result = vkCreateDebugUtilsMessengerEXT(instance_, &info, nullptr, &debug_messenger_);
+        if (result != VK_SUCCESS) {
+            spdlog::error("Cannot create debug messenger");
+            return;
+        }
+    }
+
     gsl::span<gsl::czstring> Graphics::GetSuggestedInstanceExtensions() {
         std::uint32_t glfw_extension_count = 0;
         gsl::czstring* glfw_extensions;

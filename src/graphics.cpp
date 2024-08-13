@@ -213,6 +213,58 @@ namespace veng {
 
     #pragma endregion
 
+    #pragma region DEVICES_AND_QUEUES
+    
+    Graphics::QueueFamilyIndices Graphics::FindQueueFamilies(VkPhysicalDevice device) {
+        std:uint32_t queue_family_count = 0;
+        vkGetPhysicalDeviceQueueFamilyProperties(device, &queue_family_count, nullptr);
+        std::vector<VkQueueFamilyProperties> families(queue_family_count);
+        vkGetPhysicalDeviceQueueFamilyProperties(device, &queue_family_count, families.data());
+
+        auto graphics_family_it =
+            std::find_if(families.begin(), families.end(), [](const VkQueueFamilyProperties &props)
+                         { return props.queueFlags & (VK_QUEUE_GRAPHICS_BIT | VK_QUEUE_TRANSFER_BIT); });
+
+        QueueFamilyIndices result;
+        result.graphics_family = graphics_family_it - families.begin();
+
+        return result;
+    }
+
+    bool Graphics::IsDeviceSuitable(VkPhysicalDevice device) {
+        QueueFamilyIndices families = FindQueueFamilies(device);
+        return families.IsValid();
+    }
+
+    void Graphics::PickPhysicalDevice() {
+        std::vector<VkPhysicalDevice> devices = GetAvailableDevices();
+
+        std::erase_if(devices, std::not_fn(std::bind_front(&Graphics::IsDeviceSuitable, this)));
+
+        if (devices.empty()) {
+            spdlog::error("No physical devices that match the criteria");
+            std::exit(EXIT_FAILURE);
+        }
+
+        physical_device = devices[0];
+    }
+
+    std::vector<VkPhysicalDevice> Graphics::GetAvailableDevices() {
+        std::uint32_t device_count;
+        vkEnumeratePhysicalDevices(instance_, &device_count, nullptr);
+
+        if (device_count==0) {
+            return {};
+        }
+
+        std::vector<VkPhysicalDevice> devices(device_count);
+        vkEnumeratePhysicalDevices(instance_, &device_count, devices.data());
+
+        return devices;
+    }
+
+    #pragma endregion
+
     Graphics::Graphics(gsl::not_null<Window*> window) : window_(window) {
 
         #if !defined(NDEBUG)
@@ -237,6 +289,7 @@ namespace veng {
     void Graphics::InitializeVulkan() {
         CreateInstance();
         SetupDebugMessenger();
+        PickPhysicalDevice();
     }
 
 }

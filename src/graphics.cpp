@@ -246,7 +246,7 @@ namespace veng {
             std::exit(EXIT_FAILURE);
         }
 
-        physical_device = devices[0];
+        physical_device_ = devices[0];
     }
 
     std::vector<VkPhysicalDevice> Graphics::GetAvailableDevices() {
@@ -262,6 +262,39 @@ namespace veng {
 
         return devices;
     }
+    
+    void Graphics::CreateLogicalDeviceAndQueues() {
+        QueueFamilyIndices picked_device_families = FindQueueFamilies(physical_device_);
+
+        if (!picked_device_families.IsValid()) {
+            std::exit(EXIT_FAILURE);
+        }
+
+        std::float_t queue_priority = 1.0f;
+
+        VkDeviceQueueCreateInfo queue_info = {};
+        queue_info.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+        queue_info.queueFamilyIndex = picked_device_families.graphics_family.value();
+        queue_info.queueCount = 1;
+        queue_info.pQueuePriorities = &queue_priority;
+
+        VkPhysicalDeviceFeatures required_features = {};
+
+        VkDeviceCreateInfo device_info = {};
+        device_info.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
+        device_info.queueCreateInfoCount = 1;
+        device_info.pQueueCreateInfos = &queue_info;
+        device_info.pEnabledFeatures = &required_features;
+        device_info.enabledExtensionCount = 0;
+        device_info.enabledLayerCount = 0;  // deprecated for new Vulcan
+
+        VkResult result = vkCreateDevice(physical_device_, &device_info, nullptr, &logical_device_);
+        if (result != VK_SUCCESS) {
+            std::exit(EXIT_FAILURE);
+        }
+
+        vkGetDeviceQueue(logical_device_, queue_info.queueFamilyIndex, 0, &graphics_queue_);
+    }
 
     #pragma endregion
 
@@ -275,6 +308,10 @@ namespace veng {
     }
 
     Graphics::~Graphics(){
+        if (logical_device_ != nullptr) {
+            vkDestroyDevice(logical_device_, nullptr);
+        }
+
         if (instance_ != nullptr) {
 
             // Destroy extensions before destroying the overall VkInstance
@@ -290,6 +327,7 @@ namespace veng {
         CreateInstance();
         SetupDebugMessenger();
         PickPhysicalDevice();
+        CreateLogicalDeviceAndQueues();
     }
 
 }

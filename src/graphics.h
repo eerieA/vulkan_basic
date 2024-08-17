@@ -17,7 +17,7 @@ class Graphics final {
         std::optional<std::uint32_t> graphics_family = std::nullopt;
         std::optional<std::uint32_t> presentation_family = std::nullopt;
 
-        bool IsValid() const { return graphics_family.has_value() /*&& presentation_family.has_value()*/; }
+        bool IsValid() const { return graphics_family.has_value() && presentation_family.has_value(); }
     };
     
     void InitializeVulkan();
@@ -25,6 +25,7 @@ class Graphics final {
     void SetupDebugMessenger();
     void PickPhysicalDevice();
     void CreateLogicalDeviceAndQueues();
+    void CreateSurface();
     std::vector<gsl::czstring> GetRequiredInstanceExtensions();
 
     static gsl::span<gsl::czstring> GetSuggestedInstanceExtensions();
@@ -44,6 +45,9 @@ class Graphics final {
     VkPhysicalDevice physical_device_ = VK_NULL_HANDLE;
     VkDevice logical_device_ = VK_NULL_HANDLE;
     VkQueue graphics_queue_ = VK_NULL_HANDLE;
+    VkQueue present_queue_ = VK_NULL_HANDLE;
+
+    VkSurfaceKHR surface_ = VK_NULL_HANDLE;
 
     gsl::not_null<Window*> window_;
     bool validation_enabled_ = false;

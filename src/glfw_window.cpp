@@ -18,10 +18,16 @@ namespace veng {
         glfwDestroyWindow(window_);
     }
 
-    glm::ivec2 Window::GetWindowSize() const {    
+    glm::ivec2 Window::GetWindowSize() const {
         glm::ivec2 window_size;
         glfwGetWindowSize(window_, &window_size.x, &window_size.y);
         return window_size;
+    }
+    
+    glm::ivec2 Window::GetFramebufferSize() const {
+        glm::ivec2 framebuffer_size;
+        glfwGetFramebufferSize(window_, &framebuffer_size.x, &framebuffer_size.y);
+        return framebuffer_size;
     }
 
     bool Window::ShouldClose() const {

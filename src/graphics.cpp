@@ -240,10 +240,44 @@ namespace veng {
 
         return result;
     }
+    
+    Graphics::SwapChainProperties Graphics::GetSwapChainProperties(VkPhysicalDevice device) {
+        SwapChainProperties properties;
+
+        vkGetPhysicalDeviceSurfaceCapabilitiesKHR(device, surface_, &properties.capabilities);
+
+        std::uint32_t format_count;
+        vkGetPhysicalDeviceSurfaceFormatsKHR(device, surface_, &format_count, nullptr);
+        properties.formats.resize(format_count);
+        vkGetPhysicalDeviceSurfaceFormatsKHR(device, surface_, &format_count, properties.formats.data());
+
+        std::uint32_t modes_count;
+        vkGetPhysicalDeviceSurfacePresentModesKHR(device, surface_, &modes_count, nullptr);
+        properties.present_modes.resize(modes_count);
+        vkGetPhysicalDeviceSurfacePresentModesKHR(device, surface_, &modes_count, properties.present_modes.data());
+
+        return properties;
+    }
+
+    std::vector<VkExtensionProperties> Graphics::GetDeviceAvailableExtensions(VkPhysicalDevice device) {
+        std::uint32_t available_extensions_count;
+        vkEnumerateDeviceExtensionProperties(device, nullptr, &available_extensions_count, nullptr);
+        std::vector<VkExtensionProperties> available_extensions(available_extensions_count);
+        vkEnumerateDeviceExtensionProperties(device, nullptr, &available_extensions_count, available_extensions.data());
+        
+        return available_extensions;
+    }
+
+    bool Graphics::AreAllDeviceExtensionSupported(VkPhysicalDevice device) {
+         std::vector<VkExtensionProperties> available_extensions = GetDeviceAvailableExtensions(device);
+
+         return std::all_of(required_device_extensions_.begin(), required_device_extensions_.end(),
+                            std::bind_front(IsExtensionSupported, available_extensions));
+    }
 
     bool Graphics::IsDeviceSuitable(VkPhysicalDevice device) {
         QueueFamilyIndices families = FindQueueFamilies(device);
-        return families.IsValid();
+        return families.IsValid() && AreAllDeviceExtensionSupported(device) && GetSwapChainProperties(device).IsValid();
     }
 
     void Graphics::PickPhysicalDevice() {
@@ -303,7 +337,8 @@ namespace veng {
         device_info.queueCreateInfoCount = queue_create_infos.size();
         device_info.pQueueCreateInfos = queue_create_infos.data();
         device_info.pEnabledFeatures = &required_features;
-        device_info.enabledExtensionCount = 0;
+        device_info.enabledExtensionCount = required_device_extensions_.size();
+        device_info.ppEnabledExtensionNames = required_device_extensions_.data();
         device_info.enabledLayerCount = 0;  // deprecated for new Vulcan
 
         VkResult result = vkCreateDevice(physical_device_, &device_info, nullptr, &logical_device_);
@@ -326,6 +361,119 @@ namespace veng {
         }
     }
 
+    bool IsRgbaTypeFormat(const VkSurfaceFormatKHR& format_properties) {
+        return format_properties.format == VK_FORMAT_R8G8B8A8_SRGB
+        || format_properties.format == VK_FORMAT_B8G8R8A8_SRGB;
+    }
+
+    bool IsSrgbColorSpace(const VkSurfaceFormatKHR& format_properties) {
+        return format_properties.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
+    }
+
+    bool IsCorrectFormat(const VkSurfaceFormatKHR& format_properties) {
+        return IsRgbaTypeFormat(format_properties) && IsSrgbColorSpace(format_properties);
+    }
+
+    VkSurfaceFormatKHR Graphics::ChooseSwapSurfaceFormat(gsl::span<VkSurfaceFormatKHR> formats) {
+        if (formats.size() == 1 && formats[0].format == VK_FORMAT_UNDEFINED) {
+            return {VkFormat::VK_FORMAT_R8G8B8A8_SRGB, VkColorSpaceKHR::VK_COLOR_SPACE_SRGB_NONLINEAR_KHR};
+        }
+
+        auto it = std::find_if(formats.begin(), formats.end(), IsCorrectFormat);
+
+        if (it != formats.end()) {
+            return *it;
+        }
+
+        return formats[0];
+    }
+
+    bool IsMailboxPresentMode(const VkPresentModeKHR& mode) {
+        return mode == VK_PRESENT_MODE_MAILBOX_KHR;
+    }
+
+    VkPresentModeKHR Graphics::ChooseSwapPresentMode(gsl::span<VkPresentModeKHR> present_modes) {
+        if (std::any_of(present_modes.begin(), present_modes.end(), IsMailboxPresentMode)) {
+            return VK_PRESENT_MODE_MAILBOX_KHR;
+        }
+
+        return VK_PRESENT_MODE_FIFO_KHR;
+    }
+
+    VkExtent2D Graphics::ChooseSwapExtent(const VkSurfaceCapabilitiesKHR& capabilities) {
+        constexpr std::uint32_t kInvalidSize = std::numeric_limits<std::uint32_t>::max();
+
+        if (capabilities.currentExtent.width != kInvalidSize) {
+            return capabilities.currentExtent;
+        } else {
+            glm::ivec2 size = window_->GetFramebufferSize();
+            VkExtent2D actual_extent = {
+                static_cast<std::uint32_t>(size.x),
+                static_cast<std::uint32_t>(size.y),
+            };
+
+            actual_extent.width = std::clamp(
+                actual_extent.width, capabilities.minImageExtent.width, capabilities.maxImageExtent.width);
+            actual_extent.height = std::clamp(
+                actual_extent.height, capabilities.minImageExtent.height, capabilities.maxImageExtent.height);
+
+            return actual_extent;
+        }
+    }
+
+    std::uint32_t Graphics::ChooseSwapImageCount(const VkSurfaceCapabilitiesKHR& capabilities) {
+        std::uint32_t image_count = capabilities.minImageCount + 1;
+        if (capabilities.maxImageCount > 0 && capabilities.maxImageCount < image_count) {
+            image_count = capabilities.maxImageCount;
+        }
+
+        return image_count;
+    }
+
+    void Graphics::CreateSwapChain() {
+        SwapChainProperties properties = GetSwapChainProperties(physical_device_);
+
+        VkSurfaceFormatKHR surface_format = ChooseSwapSurfaceFormat(properties.formats);
+        VkPresentModeKHR present_mode = ChooseSwapPresentMode(properties.present_modes);
+        VkExtent2D extent = ChooseSwapExtent(properties.capabilities);
+        std::uint32_t image_count = ChooseSwapImageCount(properties.capabilities);
+
+        VkSwapchainCreateInfoKHR info = {};
+        info.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
+        info.surface = surface_;
+        info.minImageCount = image_count;
+        info.imageFormat = surface_format.format;
+        info.imageColorSpace = surface_format.colorSpace;
+        info.imageExtent = extent;
+        info.imageArrayLayers = 1;
+        info.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+        info.presentMode = present_mode;
+        info.preTransform = properties.capabilities.currentTransform;
+        info.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
+        info.clipped = VK_TRUE;
+        info.oldSwapchain = VK_NULL_HANDLE;
+        
+        QueueFamilyIndices indices = FindQueueFamilies(physical_device_);
+
+        if (indices.graphics_family != indices.presentation_family) {
+            std::array<std::uint32_t, 2> family_indices = {
+                indices.graphics_family.value(),
+                indices.presentation_family.value(),
+            };
+
+            info.imageSharingMode = VK_SHARING_MODE_CONCURRENT;
+            info.queueFamilyIndexCount = family_indices.size();
+            info.pQueueFamilyIndices = family_indices.data();
+        } else {
+            info.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
+        }
+
+        VkResult result = vkCreateSwapchainKHR(logical_device_, &info, nullptr, &swap_chain_);
+        if (result != VK_SUCCESS) {
+            std::exit(EXIT_FAILURE);
+        }
+    }
+
     #pragma endregion
 
     Graphics::Graphics(gsl::not_null<Window*> window) : window_(window) {
@@ -339,6 +487,10 @@ namespace veng {
 
     Graphics::~Graphics(){
         if (logical_device_ != VK_NULL_HANDLE) {
+            if (swap_chain_ != VK_NULL_HANDLE) {
+                vkDestroySwapchainKHR(logical_device_, swap_chain_, nullptr);
+            }
+
             vkDestroyDevice(logical_device_, nullptr);
         }
 
@@ -362,6 +514,7 @@ namespace veng {
         CreateSurface();
         PickPhysicalDevice();
         CreateLogicalDeviceAndQueues();
+        CreateSwapChain();
     }
 
 }

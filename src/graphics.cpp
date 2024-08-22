@@ -433,21 +433,21 @@ namespace veng {
     void Graphics::CreateSwapChain() {
         SwapChainProperties properties = GetSwapChainProperties(physical_device_);
 
-        VkSurfaceFormatKHR surface_format = ChooseSwapSurfaceFormat(properties.formats);
-        VkPresentModeKHR present_mode = ChooseSwapPresentMode(properties.present_modes);
-        VkExtent2D extent = ChooseSwapExtent(properties.capabilities);
+        surface_format_ = ChooseSwapSurfaceFormat(properties.formats);
+        present_mode_ = ChooseSwapPresentMode(properties.present_modes);
+        extent_ = ChooseSwapExtent(properties.capabilities);
         std::uint32_t image_count = ChooseSwapImageCount(properties.capabilities);
 
         VkSwapchainCreateInfoKHR info = {};
         info.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
         info.surface = surface_;
         info.minImageCount = image_count;
-        info.imageFormat = surface_format.format;
-        info.imageColorSpace = surface_format.colorSpace;
-        info.imageExtent = extent;
+        info.imageFormat = surface_format_.format;
+        info.imageColorSpace = surface_format_.colorSpace;
+        info.imageExtent = extent_;
         info.imageArrayLayers = 1;
         info.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
-        info.presentMode = present_mode;
+        info.presentMode = present_mode_;
         info.preTransform = properties.capabilities.currentTransform;
         info.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
         info.clipped = VK_TRUE;
@@ -472,6 +472,37 @@ namespace veng {
         if (result != VK_SUCCESS) {
             std::exit(EXIT_FAILURE);
         }
+
+        swap_chain_images_.resize(image_count);
+        vkGetSwapchainImagesKHR(logical_device_, swap_chain_, &image_count, swap_chain_images_.data());
+    }
+
+    void Graphics::CreateImageViews() {
+        swap_chain_image_views_.resize(swap_chain_images_.size());
+
+        auto image_view_it = swap_chain_image_views_.begin();
+        for (VkImage image : swap_chain_images_) {
+            VkImageViewCreateInfo info = {};
+            info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+            info.image = image;
+            info.viewType = VK_IMAGE_VIEW_TYPE_2D;
+            info.format = surface_format_.format;
+            info.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
+            info.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
+            info.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
+            info.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
+            info.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+            info.subresourceRange.baseMipLevel = 0;
+            info.subresourceRange.levelCount = 1;
+            info.subresourceRange.baseArrayLayer = 0;
+            info.subresourceRange.layerCount = 1;
+
+            VkResult result = vkCreateImageView(logical_device_, &info, nullptr, &*image_view_it);
+            if (result != VK_SUCCESS) {
+                std::exit(EXIT_FAILURE);
+            }
+            std::next(image_view_it);
+        }
     }
 
     #pragma endregion
@@ -486,7 +517,11 @@ namespace veng {
     }
 
     Graphics::~Graphics(){
-        if (logical_device_ != VK_NULL_HANDLE) {
+        if (logical_device_ != VK_NULL_HANDLE) {            
+            for (VkImageView image_view : swap_chain_image_views_) {
+                vkDestroyImageView(logical_device_, image_view, nullptr);
+            }
+
             if (swap_chain_ != VK_NULL_HANDLE) {
                 vkDestroySwapchainKHR(logical_device_, swap_chain_, nullptr);
             }

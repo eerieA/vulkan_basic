@@ -35,6 +35,7 @@ class Graphics final {
     void CreateLogicalDeviceAndQueues();
     void CreateSurface();
     void CreateSwapChain();
+    void CreateImageViews();
     std::vector<gsl::czstring> GetRequiredInstanceExtensions();
 
     static gsl::span<gsl::czstring> GetSuggestedInstanceExtensions();
@@ -70,6 +71,11 @@ class Graphics final {
 
     VkSurfaceKHR surface_ = VK_NULL_HANDLE;
     VkSwapchainKHR swap_chain_ = VK_NULL_HANDLE;
+    VkSurfaceFormatKHR surface_format_;
+    VkPresentModeKHR present_mode_;
+    VkExtent2D extent_;
+    std::vector<VkImage> swap_chain_images_;
+    std::vector<VkImageView> swap_chain_image_views_;
 
     gsl::not_null<Window*> window_;
     bool validation_enabled_ = false;

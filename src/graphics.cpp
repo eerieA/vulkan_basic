@@ -507,6 +507,64 @@ namespace veng {
 
     #pragma endregion
 
+    #pragma region GRAPHICS_PIPELINE
+
+    VkShaderModule Graphics::CreateShaderModule(gsl::span<std::uint8_t> buffer) {
+        if (buffer.empty()) {
+            return VK_NULL_HANDLE;
+        }
+
+        VkShaderModuleCreateInfo info = {};
+        info.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+        info.codeSize = buffer.size();
+        info.pCode = reinterpret_cast<std::uint32_t*>(buffer.data());
+
+        VkShaderModule shader_module;
+        VkResult result = vkCreateShaderModule(logical_device_, &info, nullptr, &shader_module);
+        if (result != VK_SUCCESS) {
+            return VK_NULL_HANDLE;
+        }
+
+        return shader_module;
+    }
+
+    void Graphics::CreateGraphicsPipeline() {
+
+        std::vector<std::uint8_t> basic_vertex_data = ReadFile("./basic.vert.spv");
+        VkShaderModule vertex_shader = CreateShaderModule(basic_vertex_data);
+        gsl::final_action destroy_vertex([this, vertex_shader]() {
+            vkDestroyShaderModule(logical_device_, vertex_shader, nullptr);
+        });
+
+        std::vector<std::uint8_t> basic_fragment_data = ReadFile("./basic.frag.spv");
+        VkShaderModule fragment_shader = CreateShaderModule(basic_fragment_data);
+        gsl::final_action destroy_fragment([this, fragment_shader]() {
+            vkDestroyShaderModule(logical_device_, fragment_shader, nullptr);
+        });
+
+        if (vertex_shader == VK_NULL_HANDLE || fragment_shader == VK_NULL_HANDLE) {
+            std::exit(EXIT_FAILURE);
+        }
+
+        VkPipelineShaderStageCreateInfo vertex_stage_info = {};
+        vertex_stage_info.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+        vertex_stage_info.stage = VK_SHADER_STAGE_VERTEX_BIT;
+        vertex_stage_info.module = vertex_shader;
+        vertex_stage_info.pName = "main";
+
+        VkPipelineShaderStageCreateInfo fragment_stage_info = {};
+        fragment_stage_info.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+        fragment_stage_info.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
+        fragment_stage_info.module = fragment_shader;
+        fragment_stage_info.pName = "main";
+
+        std::array<VkPipelineShaderStageCreateInfo, 2> stage_infos[] = {
+            vertex_stage_info, fragment_stage_info
+        };
+    }
+
+    #pragma endregion
+
     Graphics::Graphics(gsl::not_null<Window*> window) : window_(window) {
 
         #if !defined(NDEBUG)
@@ -550,6 +608,7 @@ namespace veng {
         PickPhysicalDevice();
         CreateLogicalDeviceAndQueues();
         CreateSwapChain();
+        CreateGraphicsPipeline();
     }
 
 }

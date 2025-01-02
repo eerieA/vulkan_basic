@@ -1,4 +1,5 @@
 #version 450
+#include "common.glsl"
 
 vec2 hardcoded_positions[3]= vec2[](
 	vec2(0.0, -0.5),

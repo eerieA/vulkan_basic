@@ -561,6 +561,79 @@ namespace veng {
         std::array<VkPipelineShaderStageCreateInfo, 2> stage_infos[] = {
             vertex_stage_info, fragment_stage_info
         };
+
+        std::array<VkDynamicState, 2> dynamic_states = {
+            VK_DYNAMIC_STATE_VIEWPORT,
+            VK_DYNAMIC_STATE_SCISSOR,
+        };
+
+        VkPipelineDynamicStateCreateInfo dynamic_state_info = {};
+        dynamic_state_info.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
+        dynamic_state_info.dynamicStateCount = dynamic_states.size();
+        dynamic_state_info.pDynamicStates = dynamic_states.data();
+
+        VkViewport viewport = {};
+        viewport.x = 0.0f;
+        viewport.y = 0.0f;
+        viewport.width = static_cast<std::float_t>(extent_.width);
+        viewport.height = static_cast<std::float_t>(extent_.height);
+        viewport.minDepth = 0.0f;
+        viewport.maxDepth = 1.0f;
+
+        VkRect2D scissor = {};
+        scissor.offset = { 0, 0 };
+        scissor.extent = extent_;
+
+        VkPipelineViewportStateCreateInfo viewport_info = {};
+        viewport_info.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
+        viewport_info.viewportCount = 1;
+        viewport_info.pViewports = &viewport;
+        viewport_info.scissorCount = 1;
+        viewport_info.pScissors = &scissor;
+
+        VkPipelineVertexInputStateCreateInfo vertex_input_info = {};
+        vertex_input_info.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+        vertex_input_info.vertexBindingDescriptionCount = 0;
+        vertex_input_info.vertexAttributeDescriptionCount = 0;
+
+        VkPipelineInputAssemblyStateCreateInfo input_assembly_info = {};
+        input_assembly_info.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
+        input_assembly_info.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+        input_assembly_info.primitiveRestartEnable = VK_FALSE;
+
+        VkPipelineRasterizationStateCreateInfo rasterization_state_info = {};
+        rasterization_state_info.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
+        rasterization_state_info.depthClampEnable = VK_FALSE;
+        rasterization_state_info.rasterizerDiscardEnable = VK_FALSE;
+        rasterization_state_info.polygonMode = VK_POLYGON_MODE_FILL;
+        rasterization_state_info.lineWidth = 1.0f;
+        rasterization_state_info.cullMode = VK_CULL_MODE_NONE;
+        rasterization_state_info.frontFace = VK_FRONT_FACE_CLOCKWISE;
+        rasterization_state_info.depthBiasEnable = VK_FALSE;
+
+        VkPipelineMultisampleStateCreateInfo multisampling_info = {};
+        multisampling_info.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
+        multisampling_info.sampleShadingEnable = VK_FALSE;
+        multisampling_info.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
+
+        VkPipelineColorBlendAttachmentState color_blend_attachment = {};
+        color_blend_attachment.blendEnable = VK_FALSE;
+        color_blend_attachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |
+                                                VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+
+        VkPipelineColorBlendStateCreateInfo color_blending_info = {};
+        color_blending_info.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
+        color_blending_info.logicOpEnable - VK_FALSE;
+        color_blending_info.attachmentCount = 1;
+        color_blending_info.pAttachments = &color_blend_attachment;
+
+        VkPipelineLayoutCreateInfo layout_info = {};
+        layout_info.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+        VkResult layout_result =
+            vkCreatePipelineLayout(logical_device_, &layout_info, nullptr, &pipeline_layout_);
+        if (layout_result != VK_SUCCESS) {
+            std::exit(EXIT_FAILURE);
+        }
     }
 
     #pragma endregion
@@ -575,7 +648,11 @@ namespace veng {
     }
 
     Graphics::~Graphics(){
-        if (logical_device_ != VK_NULL_HANDLE) {            
+        if (logical_device_ != VK_NULL_HANDLE) {
+            if (pipeline_layout_ != VK_NULL_HANDLE) {
+                vkDestroyPipelineLayout(logical_device_, pipeline_layout_, nullptr);
+            }
+
             for (VkImageView image_view : swap_chain_image_views_) {
                 vkDestroyImageView(logical_device_, image_view, nullptr);
             }

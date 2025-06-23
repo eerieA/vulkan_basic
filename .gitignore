@@ -1,7 +1,8 @@
 .vs/
 .vscode/
-build/
+CMakeSettings.json
 
+build/
 build.bat
 main.exe
 main.obj

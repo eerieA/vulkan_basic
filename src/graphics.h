@@ -36,6 +36,7 @@ class Graphics final {
     void CreateSurface();
     void CreateSwapChain();
     void CreateImageViews();
+    void CreateRenderPass();
     void CreateGraphicsPipeline();
 
     std::vector<gsl::czstring> GetRequiredInstanceExtensions();
@@ -82,6 +83,8 @@ class Graphics final {
     std::vector<VkImageView> swap_chain_image_views_;
 
     VkPipelineLayout pipeline_layout_ = VK_NULL_HANDLE;
+    VkRenderPass render_pass_ = VK_NULL_HANDLE;
+    VkPipeline pipeline_ = VK_NULL_HANDLE;
 
     gsl::not_null<Window*> window_;
     bool validation_enabled_ = false;

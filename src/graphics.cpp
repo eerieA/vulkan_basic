@@ -558,7 +558,7 @@ namespace veng {
         fragment_stage_info.module = fragment_shader;
         fragment_stage_info.pName = "main";
 
-        std::array<VkPipelineShaderStageCreateInfo, 2> stage_infos[] = {
+        std::array<VkPipelineShaderStageCreateInfo, 2> stage_infos = {
             vertex_stage_info, fragment_stage_info
         };
 
@@ -594,7 +594,7 @@ namespace veng {
         VkPipelineVertexInputStateCreateInfo vertex_input_info = {};
         vertex_input_info.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
         vertex_input_info.vertexBindingDescriptionCount = 0;
-        vertex_input_info.vertexAttributeDescriptionCount = 0;
+        vertex_input_info.vertexAttributeDescriptionCount = 0;  // Will return here later to pass vertex data
 
         VkPipelineInputAssemblyStateCreateInfo input_assembly_info = {};
         input_assembly_info.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
@@ -623,7 +623,7 @@ namespace veng {
 
         VkPipelineColorBlendStateCreateInfo color_blending_info = {};
         color_blending_info.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
-        color_blending_info.logicOpEnable - VK_FALSE;
+        color_blending_info.logicOpEnable = VK_FALSE;
         color_blending_info.attachmentCount = 1;
         color_blending_info.pAttachments = &color_blend_attachment;
 
@@ -633,6 +633,61 @@ namespace veng {
             vkCreatePipelineLayout(logical_device_, &layout_info, nullptr, &pipeline_layout_);
         if (layout_result != VK_SUCCESS) {
             std::exit(EXIT_FAILURE);
+        }
+
+        VkGraphicsPipelineCreateInfo pipeline_info = {};
+        pipeline_info.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
+        pipeline_info.stageCount = stage_infos.size();
+        pipeline_info.pStages = stage_infos.data();
+        pipeline_info.pVertexInputState = &vertex_input_info;
+        pipeline_info.pInputAssemblyState = &input_assembly_info;
+        pipeline_info.pViewportState = &viewport_info;
+        pipeline_info.pRasterizationState = &rasterization_state_info;
+        pipeline_info.pMultisampleState = &multisampling_info;
+        pipeline_info.pDepthStencilState = nullptr;
+        pipeline_info.pColorBlendState = &color_blending_info;
+        pipeline_info.pDynamicState = &dynamic_state_info;
+        pipeline_info.layout = pipeline_layout_;
+        pipeline_info.renderPass = render_pass_;
+        pipeline_info.subpass = 0;
+
+        VkResult pipeline_result = vkCreateGraphicsPipelines(
+            logical_device_, VK_NULL_HANDLE, 1, &pipeline_info, nullptr, &pipeline_);
+        if (pipeline_result != VK_SUCCESS) {
+            std::exit(EXIT_FAILURE);
+        }
+    }
+
+    void Graphics::CreateRenderPass() {
+        VkAttachmentDescription color_attachment = {};
+        color_attachment.format = surface_format_.format;
+        color_attachment.samples = VK_SAMPLE_COUNT_1_BIT;
+        color_attachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+        color_attachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+        color_attachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+        color_attachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+        color_attachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+        color_attachment.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+
+        VkAttachmentReference color_attachment_ref = {};
+        color_attachment_ref.attachment = 0;
+        color_attachment_ref.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+
+        VkSubpassDescription main_subpass = {};
+        main_subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+        main_subpass.colorAttachmentCount = 1;
+        main_subpass.pColorAttachments = &color_attachment_ref;
+
+        VkRenderPassCreateInfo render_pass_info = {};
+        render_pass_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
+        render_pass_info.attachmentCount = 1;
+        render_pass_info.pAttachments = &color_attachment;
+        render_pass_info.subpassCount = 1;
+        render_pass_info.pSubpasses = &main_subpass;
+
+        VkResult result = vkCreateRenderPass(logical_device_, &render_pass_info, nullptr, &render_pass_);
+        if (result != VK_SUCCESS) {
+            std:exit(EXIT_FAILURE);
         }
     }
 
@@ -649,6 +704,10 @@ namespace veng {
 
     Graphics::~Graphics(){
         if (logical_device_ != VK_NULL_HANDLE) {
+            if (pipeline_ != VK_NULL_HANDLE) {
+                vkDestroyPipeline(logical_device_, pipeline_, nullptr);
+            }
+
             if (pipeline_layout_ != VK_NULL_HANDLE) {
                 vkDestroyPipelineLayout(logical_device_, pipeline_layout_, nullptr);
             }
@@ -662,6 +721,10 @@ namespace veng {
             }
 
             vkDestroyDevice(logical_device_, nullptr);
+        }
+
+        if (render_pass_ != VK_NULL_HANDLE) {
+            vkDestroyRenderPass(logical_device_, render_pass_, nullptr);
         }
 
         if (instance_ != VK_NULL_HANDLE) {
@@ -685,6 +748,7 @@ namespace veng {
         PickPhysicalDevice();
         CreateLogicalDeviceAndQueues();
         CreateSwapChain();
+        CreateRenderPass();
         CreateGraphicsPipeline();
     }
 

@@ -693,6 +693,57 @@ namespace veng {
 
     #pragma endregion
 
+    #pragma region DRAWING
+
+    void Graphics::CreateFramebuffers() {
+        swap_chain_framebuffers_.resize(swap_chain_image_views_.size());
+
+        for (std::uint32_t i = 0; i < swap_chain_image_views_.size(); i++) {
+            VkFramebufferCreateInfo info = {};
+            info.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+            info.renderPass = render_pass_;
+            info.attachmentCount = 1;
+            info.pAttachments = &swap_chain_image_views_[i];
+            info.width = extent_.width;
+            info.height = extent_.height;
+            info.layers = 1;
+
+            VkResult result =
+                vkCreateFramebuffer(logical_device_, &info, nullptr, &swap_chain_framebuffers_[i]);
+            if (result != VK_SUCCESS) {
+                std::exit(EXIT_FAILURE);
+            }
+        }
+    }
+
+    void Graphics::CreateCommandPool() {
+        QueueFamilyIndices indices = FindQueueFamilies(physical_device_);
+        VkCommandPoolCreateInfo pool_info = {};
+        pool_info.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+        pool_info.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
+        pool_info.queueFamilyIndex = indices.graphics_family.value();
+
+        VkResult result = vkCreateCommandPool(logical_device_, &pool_info, nullptr, &command_pool_);
+        if (result != VK_SUCCESS) {
+            std::exit(EXIT_FAILURE);
+        }
+    }
+
+    void Graphics::CreateCommandBuffer() {
+        VkCommandBufferAllocateInfo info = {};
+        info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+        info.commandPool = command_pool_;
+        info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+        info.commandBufferCount = 1;
+
+        VkResult result = vkAllocateCommandBuffers(logical_device_, &info, &command_buffer_);
+        if (result != VK_SUCCESS) {
+            std::exit(EXIT_FAILURE);
+        }
+    }
+
+    #pragma endregion
+
     Graphics::Graphics(gsl::not_null<Window*> window) : window_(window) {
 
         #if !defined(NDEBUG)
@@ -704,6 +755,14 @@ namespace veng {
 
     Graphics::~Graphics(){
         if (logical_device_ != VK_NULL_HANDLE) {
+            if (command_pool_ != VK_NULL_HANDLE) {
+                vkDestroyCommandPool(logical_device_, command_pool_, nullptr);
+            }
+
+            for (VkFramebuffer framebuffer : swap_chain_framebuffers_) {
+                vkDestroyFramebuffer(logical_device_, framebuffer, nullptr);
+            }
+
             if (pipeline_ != VK_NULL_HANDLE) {
                 vkDestroyPipeline(logical_device_, pipeline_, nullptr);
             }
@@ -720,11 +779,11 @@ namespace veng {
                 vkDestroySwapchainKHR(logical_device_, swap_chain_, nullptr);
             }
 
-            vkDestroyDevice(logical_device_, nullptr);
-        }
+            if (render_pass_ != VK_NULL_HANDLE) {
+                vkDestroyRenderPass(logical_device_, render_pass_, nullptr);
+            }
 
-        if (render_pass_ != VK_NULL_HANDLE) {
-            vkDestroyRenderPass(logical_device_, render_pass_, nullptr);
+            vkDestroyDevice(logical_device_, nullptr);
         }
 
         if (instance_ != VK_NULL_HANDLE) {
@@ -750,6 +809,9 @@ namespace veng {
         CreateSwapChain();
         CreateRenderPass();
         CreateGraphicsPipeline();
+        CreateFramebuffers();
+        CreateCommandPool();
+        CreateCommandBuffer();
     }
 
 }

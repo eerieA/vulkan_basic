@@ -38,6 +38,9 @@ class Graphics final {
     void CreateImageViews();
     void CreateRenderPass();
     void CreateGraphicsPipeline();
+    void CreateFramebuffers();
+    void CreateCommandPool();
+    void CreateCommandBuffer();
 
     std::vector<gsl::czstring> GetRequiredInstanceExtensions();
 
@@ -81,10 +84,13 @@ class Graphics final {
     VkExtent2D extent_;
     std::vector<VkImage> swap_chain_images_;
     std::vector<VkImageView> swap_chain_image_views_;
+    std::vector<VkFramebuffer> swap_chain_framebuffers_;
 
     VkPipelineLayout pipeline_layout_ = VK_NULL_HANDLE;
     VkRenderPass render_pass_ = VK_NULL_HANDLE;
     VkPipeline pipeline_ = VK_NULL_HANDLE;
+    VkCommandPool command_pool_ = VK_NULL_HANDLE;
+    VkCommandBuffer command_buffer_ = VK_NULL_HANDLE;
 
     gsl::not_null<Window*> window_;
     bool validation_enabled_ = false;

@@ -501,7 +501,7 @@ namespace veng {
             if (result != VK_SUCCESS) {
                 std::exit(EXIT_FAILURE);
             }
-            std::next(image_view_it);
+            image_view_it = std::next(image_view_it);
         }
     }
 
@@ -753,7 +753,8 @@ namespace veng {
         }
     }
 
-    void Graphics::BeginCommands(std::uint32_t current_image_index) {
+    void Graphics::BeginCommands() {
+        vkResetCommandBuffer(command_buffer_, 0);
         VkCommandBufferBeginInfo begin_info = {};
         begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
 
@@ -765,7 +766,7 @@ namespace veng {
         VkRenderPassBeginInfo render_pass_begin_info = {};
         render_pass_begin_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
         render_pass_begin_info.renderPass = render_pass_;
-        render_pass_begin_info.framebuffer = swap_chain_framebuffers_[current_image_index];
+        render_pass_begin_info.framebuffer = swap_chain_framebuffers_[current_image_index_];
         render_pass_begin_info.renderArea.offset = { 0,0 };
         render_pass_begin_info.renderArea.extent = extent_;
 
@@ -798,9 +799,6 @@ namespace veng {
         VkSemaphoreCreateInfo semaphore_info = {};
         semaphore_info.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
 
-        VkFenceCreateInfo fence_info = {};
-        fence_info.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
-
         if (vkCreateSemaphore(logical_device_, &semaphore_info, nullptr, &image_available_signal_) !=
             VK_SUCCESS) {
             std::exit(EXIT_FAILURE);
@@ -811,10 +809,62 @@ namespace veng {
             std::exit(EXIT_FAILURE);
         }
 
+        VkFenceCreateInfo fence_info = {};
+        fence_info.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+        fence_info.flags = VK_FENCE_CREATE_SIGNALED_BIT;
+
         if (vkCreateFence(logical_device_, &fence_info, nullptr, &still_rendering_fence_) !=
             VK_SUCCESS) {
             std::exit(EXIT_FAILURE);
         }
+    }
+
+    void Graphics::BeginFrame() {
+        vkWaitForFences(logical_device_, 1, &still_rendering_fence_, VK_TRUE, UINT64_MAX);
+        vkResetFences(logical_device_, 1, &still_rendering_fence_);
+
+        vkAcquireNextImageKHR(
+            logical_device_,
+            swap_chain_,
+            UINT64_MAX,
+            image_available_signal_,
+            VK_NULL_HANDLE,
+            &current_image_index_);
+
+        BeginCommands();
+    }
+
+    void Graphics::EndFrame() {
+        EndCommands();
+
+        VkSubmitInfo submit_info = {};
+        submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+
+        VkPipelineStageFlags wait_stage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
+        submit_info.waitSemaphoreCount = 1;
+        submit_info.pWaitSemaphores = &image_available_signal_;
+        submit_info.pWaitDstStageMask = &wait_stage;
+
+        submit_info.commandBufferCount = 1;
+        submit_info.pCommandBuffers = &command_buffer_;
+
+        submit_info.signalSemaphoreCount = 1;
+        submit_info.pSignalSemaphores = &render_finished_signal_;
+
+        VkResult submit_result = vkQueueSubmit(graphics_queue_, 1, &submit_info, still_rendering_fence_);
+        if (submit_result != VK_SUCCESS) {
+            throw std::runtime_error("Failed to submit draw commands!");
+        }
+
+        VkPresentInfoKHR present_info = {};
+        present_info.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+        present_info.waitSemaphoreCount = 1;
+        present_info.pWaitSemaphores = &render_finished_signal_;
+        present_info.swapchainCount = 1;
+        present_info.pSwapchains = &swap_chain_;
+        present_info.pImageIndices = &current_image_index_;
+
+        vkQueuePresentKHR(present_queue_, &present_info);
     }
 
     #pragma endregion
@@ -830,6 +880,8 @@ namespace veng {
 
     Graphics::~Graphics(){
         if (logical_device_ != VK_NULL_HANDLE) {
+            vkDeviceWaitIdle(logical_device_);
+
             if (image_available_signal_ != VK_NULL_HANDLE) {
                 vkDestroySemaphore(logical_device_, image_available_signal_, nullptr);
             }
@@ -894,6 +946,7 @@ namespace veng {
         PickPhysicalDevice();
         CreateLogicalDeviceAndQueues();
         CreateSwapChain();
+        CreateImageViews();
         CreateRenderPass();
         CreateGraphicsPipeline();
         CreateFramebuffers();

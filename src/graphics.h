@@ -11,7 +11,7 @@ class Graphics final {
     Graphics(gsl::not_null<Window*> window);
     ~Graphics();
 
-    void BeginFrame();
+    bool BeginFrame();
     void RenderTriangle();
     void EndFrame();
 
@@ -49,6 +49,9 @@ class Graphics final {
     void CreateCommandPool();
     void CreateCommandBuffer();
     void CreateSignals();
+
+    void RecreateSwapChain();
+    void CleanupSwapChain();
 
     // Rendering
 

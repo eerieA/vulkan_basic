@@ -819,11 +819,10 @@ namespace veng {
         }
     }
 
-    void Graphics::BeginFrame() {
+    bool Graphics::BeginFrame() {
         vkWaitForFences(logical_device_, 1, &still_rendering_fence_, VK_TRUE, UINT64_MAX);
-        vkResetFences(logical_device_, 1, &still_rendering_fence_);
 
-        vkAcquireNextImageKHR(
+        VkResult image_acquire_result = vkAcquireNextImageKHR(
             logical_device_,
             swap_chain_,
             UINT64_MAX,
@@ -831,7 +830,18 @@ namespace veng {
             VK_NULL_HANDLE,
             &current_image_index_);
 
+        if (image_acquire_result == VK_ERROR_OUT_OF_DATE_KHR) {
+            RecreateSwapChain();
+            return false;
+        }
+
+        if (image_acquire_result != VK_SUCCESS && image_acquire_result != VK_SUBOPTIMAL_KHR) {
+            throw std::runtime_error("Couldn't acquire render image!");
+        }
+
+        vkResetFences(logical_device_, 1, &still_rendering_fence_);
         BeginCommands();
+        return true;
     }
 
     void Graphics::EndFrame() {
@@ -864,10 +874,50 @@ namespace veng {
         present_info.pSwapchains = &swap_chain_;
         present_info.pImageIndices = &current_image_index_;
 
-        vkQueuePresentKHR(present_queue_, &present_info);
+        VkResult result = vkQueuePresentKHR(present_queue_, &present_info);
+
+        if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR) {
+            RecreateSwapChain();
+        }
+        else if (result != VK_SUCCESS) {
+            throw std::runtime_error("Failed to present swap chain image!");
+        }
     }
 
     #pragma endregion
+
+    void Graphics::RecreateSwapChain() {
+        glm::ivec2 size = window_->GetFramebufferSize();
+        if (size.x == 0 || size.y == 0) {
+            size = window_->GetFramebufferSize();
+            glfwWaitEvents();
+        }
+
+        vkDeviceWaitIdle(logical_device_);
+        CleanupSwapChain();
+
+        CreateSwapChain();
+        CreateImageViews();
+        CreateFramebuffers();
+    }
+
+    void Graphics::CleanupSwapChain() {
+        if (logical_device_ == VK_NULL_HANDLE) {
+            return;
+        }
+
+        for (VkFramebuffer framebuffer : swap_chain_framebuffers_) {
+            vkDestroyFramebuffer(logical_device_, framebuffer, nullptr);
+        }
+
+        for (VkImageView image_view : swap_chain_image_views_) {
+            vkDestroyImageView(logical_device_, image_view, nullptr);
+        }
+
+        if (swap_chain_ != VK_NULL_HANDLE) {
+            vkDestroySwapchainKHR(logical_device_, swap_chain_, nullptr);
+        }
+    }
 
     Graphics::Graphics(gsl::not_null<Window*> window) : window_(window) {
 
@@ -879,8 +929,11 @@ namespace veng {
     }
 
     Graphics::~Graphics(){
+
         if (logical_device_ != VK_NULL_HANDLE) {
             vkDeviceWaitIdle(logical_device_);
+
+            CleanupSwapChain();
 
             if (image_available_signal_ != VK_NULL_HANDLE) {
                 vkDestroySemaphore(logical_device_, image_available_signal_, nullptr);
@@ -898,24 +951,12 @@ namespace veng {
                 vkDestroyCommandPool(logical_device_, command_pool_, nullptr);
             }
 
-            for (VkFramebuffer framebuffer : swap_chain_framebuffers_) {
-                vkDestroyFramebuffer(logical_device_, framebuffer, nullptr);
-            }
-
             if (pipeline_ != VK_NULL_HANDLE) {
                 vkDestroyPipeline(logical_device_, pipeline_, nullptr);
             }
 
             if (pipeline_layout_ != VK_NULL_HANDLE) {
                 vkDestroyPipelineLayout(logical_device_, pipeline_layout_, nullptr);
-            }
-
-            for (VkImageView image_view : swap_chain_image_views_) {
-                vkDestroyImageView(logical_device_, image_view, nullptr);
-            }
-
-            if (swap_chain_ != VK_NULL_HANDLE) {
-                vkDestroySwapchainKHR(logical_device_, swap_chain_, nullptr);
             }
 
             if (render_pass_ != VK_NULL_HANDLE) {

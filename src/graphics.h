@@ -3,6 +3,8 @@
 #include <vector>
 #include <vulkan/vulkan.h>
 #include <glfw_window.h>
+#include <vertex.h>
+#include <buffer_handle.h>
 
 namespace veng {
     
@@ -12,8 +14,11 @@ class Graphics final {
     ~Graphics();
 
     bool BeginFrame();
-    void RenderTriangle();
+    void RenderBuffer(BufferHandle handle, std::uint32_t vertex_count);
     void EndFrame();
+
+    BufferHandle CreateVertexBuffer(gsl::span<Vertex> vertices);
+    void DestroyVertexBuffer(BufferHandle handle);
 
     private:
 
@@ -80,6 +85,8 @@ class Graphics final {
     std::uint32_t ChooseSwapImageCount(const VkSurfaceCapabilitiesKHR& capabilities);
 
     VkShaderModule CreateShaderModule(gsl::span<std::uint8_t> buffer);
+
+    std::uint32_t FindMemoryType(std::uint32_t type_bits_filter, VkMemoryPropertyFlags required_properties);
 
     VkViewport GetViewport();
     VkRect2D GetScissor();

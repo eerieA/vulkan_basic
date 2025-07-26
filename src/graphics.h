@@ -88,6 +88,10 @@ class Graphics final {
 
     std::uint32_t FindMemoryType(std::uint32_t type_bits_filter, VkMemoryPropertyFlags required_properties);
 
+    BufferHandle CreateBuffer(VkDeviceSize size, VkBufferCreateFlags usage, VkMemoryPropertyFlags properties);
+    VkCommandBuffer BeginTransientCommandBuffer();
+    void EndTransientCommandBuffer(VkCommandBuffer command_buffer);
+
     VkViewport GetViewport();
     VkRect2D GetScissor();
 

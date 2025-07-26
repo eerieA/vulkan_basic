@@ -945,14 +945,15 @@ namespace veng {
         throw std::runtime_error("Cannot find memory type!");
     }
 
+    BufferHandle Graphics::CreateBuffer(
+        VkDeviceSize size, VkBufferCreateFlags usage, VkMemoryPropertyFlags properties) {
 
-    BufferHandle Graphics::CreateVertexBuffer(gsl::span<Vertex> vertices) {
         BufferHandle handle = {};
 
         VkBufferCreateInfo buffer_info = {};
         buffer_info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-        buffer_info.size = sizeof(Vertex) * vertices.size();
-        buffer_info.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
+        buffer_info.size = size;
+        buffer_info.usage = usage;
         buffer_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 
         VkResult result = vkCreateBuffer(logical_device_, &buffer_info, nullptr, &handle.buffer);
@@ -963,8 +964,7 @@ namespace veng {
         VkMemoryRequirements memory_requirements;
         vkGetBufferMemoryRequirements(logical_device_, handle.buffer, &memory_requirements);
 
-        std::uint32_t chosen_memory_type = FindMemoryType(memory_requirements.memoryTypeBits,
-            VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+        std::uint32_t chosen_memory_type = FindMemoryType(memory_requirements.memoryTypeBits, properties);
 
         VkMemoryAllocateInfo allocation_info = {};
         allocation_info.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
@@ -980,9 +980,16 @@ namespace veng {
 
         vkBindBufferMemory(logical_device_, handle.buffer, handle.memory, 0);
 
+        return handle;
+    }
+
+    BufferHandle Graphics::CreateVertexBuffer(gsl::span<Vertex> vertices) {
+        VkDeviceSize size = sizeof(Vertex) * vertices.size();
+        BufferHandle handle = CreateBuffer(size, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+        
         void* data;
-        vkMapMemory(logical_device_, handle.memory, 0, buffer_info.size, 0, &data);
-        std::memcpy(data, vertices.data(), buffer_info.size);
+        vkMapMemory(logical_device_, handle.memory, 0, size, 0, &data);
+        std::memcpy(data, vertices.data(), size);
         vkUnmapMemory(logical_device_, handle.memory);
         
         return handle;
@@ -998,6 +1005,36 @@ namespace veng {
         VkDeviceSize offset = 0;
         vkCmdBindVertexBuffers(command_buffer_, 0, 1, &handle.buffer, &offset);
         vkCmdDraw(command_buffer_, vertex_count, 1, 0, 0);
+    }
+
+    VkCommandBuffer Graphics::BeginTransientCommandBuffer() {
+        VkCommandBufferAllocateInfo allocation_info = {};
+        allocation_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+        allocation_info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+        allocation_info.commandPool = command_pool_;
+        allocation_info.commandBufferCount = 1;
+
+        VkCommandBuffer buffer;
+        vkAllocateCommandBuffers(logical_device_, &allocation_info, &buffer);
+
+        VkCommandBufferBeginInfo begin_info;
+        begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+        begin_info.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+        vkBeginCommandBuffer(buffer, &begin_info);
+
+        return buffer;
+    }
+
+    void Graphics::EndTransientCommandBuffer(VkCommandBuffer command_buffer) {
+        vkEndCommandBuffer(command_buffer);
+
+        VkSubmitInfo  submit_info = {};
+        submit_info.commandBufferCount = 1;
+        submit_info.pCommandBuffers = &command_buffer;
+
+        vkQueueSubmit(graphics_queue_, 1, &submit_info, VK_NULL_HANDLE);
+        vkQueueWaitIdle(graphics_queue_);
+        vkFreeCommandBuffers(logical_device_, command_pool_, 1, &command_buffer);
     }
 
     #pragma endregion

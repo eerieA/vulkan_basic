@@ -15,10 +15,12 @@ class Graphics final {
 
     bool BeginFrame();
     void RenderBuffer(BufferHandle handle, std::uint32_t vertex_count);
+    void RenderIndexedBuffer(BufferHandle vertex_buffer, BufferHandle index_buffer, std::uint32_t count);
     void EndFrame();
 
     BufferHandle CreateVertexBuffer(gsl::span<Vertex> vertices);
-    void DestroyVertexBuffer(BufferHandle handle);
+    BufferHandle CreateIndexBuffer(gsl::span<std::uint32_t> indices);
+    void DestroyBuffer(BufferHandle handle);
 
     private:
 

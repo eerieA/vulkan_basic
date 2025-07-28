@@ -21,16 +21,23 @@ std::int32_t main(std::int32_t argc, gsl::zstring* argv) {
     };
 
     veng::BufferHandle buffer = graphics.CreateVertexBuffer(vertices);
+
+    std::array<std::uint32_t, 3> indices = {
+        0, 1, 2
+    };
+
+    veng::BufferHandle index_buffer = graphics.CreateIndexBuffer(indices);
     
     while (!window.ShouldClose()) {
         glfwPollEvents();   // not window specific
         if (graphics.BeginFrame()) {
-            graphics.RenderBuffer(buffer, vertices.size());
+            graphics.RenderIndexedBuffer(buffer, index_buffer, indices.size());
             graphics.EndFrame();
         }
     }
 
-    graphics.DestroyVertexBuffer(buffer);
+    graphics.DestroyBuffer(buffer);
+    graphics.DestroyBuffer(index_buffer);
 
     return EXIT_SUCCESS;
 }

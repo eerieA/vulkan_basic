@@ -983,19 +983,68 @@ namespace veng {
         return handle;
     }
 
-    BufferHandle Graphics::CreateVertexBuffer(gsl::span<Vertex> vertices) {
-        VkDeviceSize size = sizeof(Vertex) * vertices.size();
-        BufferHandle handle = CreateBuffer(size, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
-        
+    BufferHandle Graphics::CreateIndexBuffer(gsl::span<std::uint32_t> indices) {
+        VkDeviceSize size = sizeof(std::uint32_t) * indices.size();
+
+        BufferHandle staging_handle = CreateBuffer(
+            size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+            VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+
         void* data;
-        vkMapMemory(logical_device_, handle.memory, 0, size, 0, &data);
-        std::memcpy(data, vertices.data(), size);
-        vkUnmapMemory(logical_device_, handle.memory);
-        
-        return handle;
+        vkMapMemory(logical_device_, staging_handle.memory, 0, size, 0, &data);
+        std::memcpy(data, indices.data(), size);
+        vkUnmapMemory(logical_device_, staging_handle.memory);
+
+        BufferHandle gpu_handle = CreateBuffer(
+            size, VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+            VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+
+        VkCommandBuffer transient_commands = BeginTransientCommandBuffer();
+
+        VkBufferCopy copy_info = {};
+        copy_info.srcOffset = 0;
+        copy_info.dstOffset = 0;
+        copy_info.size = size;
+        vkCmdCopyBuffer(transient_commands, staging_handle.buffer, gpu_handle.buffer, 1, &copy_info);
+
+        EndTransientCommandBuffer(transient_commands);
+
+        DestroyBuffer(staging_handle);
+
+        return gpu_handle;
     }
 
-    void Graphics::DestroyVertexBuffer(BufferHandle handle) {
+    BufferHandle Graphics::CreateVertexBuffer(gsl::span<Vertex> vertices) {
+        VkDeviceSize size = sizeof(Vertex) * vertices.size();
+        BufferHandle staging_handle = CreateBuffer(
+            size, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+            VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+        
+        void* data;
+        vkMapMemory(logical_device_, staging_handle.memory, 0, size, 0, &data);
+        std::memcpy(data, vertices.data(), size);
+        vkUnmapMemory(logical_device_, staging_handle.memory);
+
+        BufferHandle gpu_handle = CreateBuffer(
+            size, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+            VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+
+        VkCommandBuffer transient_commands = BeginTransientCommandBuffer();
+
+        VkBufferCopy copy_info = {};
+        copy_info.srcOffset = 0;
+        copy_info.dstOffset = 0;
+        copy_info.size = size;
+        vkCmdCopyBuffer(transient_commands, staging_handle.buffer, gpu_handle.buffer, 1, &copy_info);
+
+        EndTransientCommandBuffer(transient_commands);
+
+        DestroyBuffer(staging_handle);
+        
+        return gpu_handle;
+    }
+
+    void Graphics::DestroyBuffer(BufferHandle handle) {
         vkDeviceWaitIdle(logical_device_);
         vkDestroyBuffer(logical_device_, handle.buffer, nullptr);
         vkFreeMemory(logical_device_, handle.memory, nullptr);
@@ -1005,6 +1054,14 @@ namespace veng {
         VkDeviceSize offset = 0;
         vkCmdBindVertexBuffers(command_buffer_, 0, 1, &handle.buffer, &offset);
         vkCmdDraw(command_buffer_, vertex_count, 1, 0, 0);
+    }
+
+    void Graphics::RenderIndexedBuffer(
+        BufferHandle vertex_buffer, BufferHandle index_buffer, std::uint32_t count) {
+        VkDeviceSize offset = 0;
+        vkCmdBindVertexBuffers(command_buffer_, 0, 1, &vertex_buffer.buffer, &offset);
+        vkCmdBindIndexBuffer(command_buffer_, index_buffer.buffer, 0, VK_INDEX_TYPE_UINT32);
+        vkCmdDrawIndexed(command_buffer_, count, 1, 0, 0, 0);
     }
 
     VkCommandBuffer Graphics::BeginTransientCommandBuffer() {
@@ -1017,7 +1074,7 @@ namespace veng {
         VkCommandBuffer buffer;
         vkAllocateCommandBuffers(logical_device_, &allocation_info, &buffer);
 
-        VkCommandBufferBeginInfo begin_info;
+        VkCommandBufferBeginInfo begin_info = {};
         begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
         begin_info.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
         vkBeginCommandBuffer(buffer, &begin_info);
@@ -1029,6 +1086,7 @@ namespace veng {
         vkEndCommandBuffer(command_buffer);
 
         VkSubmitInfo  submit_info = {};
+        submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
         submit_info.commandBufferCount = 1;
         submit_info.pCommandBuffers = &command_buffer;
 

@@ -632,6 +632,15 @@ namespace veng {
 
         VkPipelineLayoutCreateInfo layout_info = {};
         layout_info.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+
+        VkPushConstantRange model_matrix_range = {};
+        model_matrix_range.offset = 0;
+        model_matrix_range.size = sizeof(glm::mat4);
+        model_matrix_range.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+
+        layout_info.pushConstantRangeCount = 1;
+        layout_info.pPushConstantRanges = &model_matrix_range;
+
         VkResult layout_result =
             vkCreatePipelineLayout(logical_device_, &layout_info, nullptr, &pipeline_layout_);
         if (layout_result != VK_SUCCESS) {
@@ -848,6 +857,7 @@ namespace veng {
 
         vkResetFences(logical_device_, 1, &still_rendering_fence_);
         BeginCommands();
+        SetModelMatrix(glm::mat4(1.0f));
         return true;
     }
 
@@ -1062,6 +1072,12 @@ namespace veng {
         vkCmdBindVertexBuffers(command_buffer_, 0, 1, &vertex_buffer.buffer, &offset);
         vkCmdBindIndexBuffer(command_buffer_, index_buffer.buffer, 0, VK_INDEX_TYPE_UINT32);
         vkCmdDrawIndexed(command_buffer_, count, 1, 0, 0, 0);
+        SetModelMatrix(glm::mat4(1.0f));    // Reset model matrix
+    }
+
+    void Graphics::SetModelMatrix(glm::mat4 model) {
+        vkCmdPushConstants(
+            command_buffer_, pipeline_layout_, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(glm::mat4), &model);
     }
 
     VkCommandBuffer Graphics::BeginTransientCommandBuffer() {

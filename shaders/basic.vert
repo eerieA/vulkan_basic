@@ -6,7 +6,11 @@ layout(location = 1) in vec3 input_color;
 
 layout(location = 0) out vec4 vertex_color;
 
+layout(push_constant) uniform Model {
+	mat4 transformation;
+} model;
+
 void main() {
-	gl_Position = vec4(input_position, 1.0);
+	gl_Position = model.transformation * vec4(input_position, 1.0);
 	vertex_color = vec4(input_color, 1.0);
 }

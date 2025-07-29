@@ -4,6 +4,7 @@
 #include <glfw_monitor.h>
 #include <glfw_window.h>
 #include <graphics.h>
+#include <glm/gtc/matrix_transform.hpp>
 
 std::int32_t main(std::int32_t argc, gsl::zstring* argv) {
 
@@ -27,6 +28,8 @@ std::int32_t main(std::int32_t argc, gsl::zstring* argv) {
     };
 
     veng::BufferHandle index_buffer = graphics.CreateIndexBuffer(indices);
+
+    glm::mat4 rotation = glm::rotate(glm::mat4(1.0f), glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f));
     
     while (!window.ShouldClose()) {
         glfwPollEvents();   // not window specific

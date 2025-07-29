@@ -14,6 +14,7 @@ class Graphics final {
     ~Graphics();
 
     bool BeginFrame();
+    void SetModelMatrix(glm::mat4 model);
     void RenderBuffer(BufferHandle handle, std::uint32_t vertex_count);
     void RenderIndexedBuffer(BufferHandle vertex_buffer, BufferHandle index_buffer, std::uint32_t count);
     void EndFrame();

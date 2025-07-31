@@ -15,6 +15,7 @@ class Graphics final {
 
     bool BeginFrame();
     void SetModelMatrix(glm::mat4 model);
+    void SetViewProjection(glm::mat4 view, glm::mat4 projection);
     void RenderBuffer(BufferHandle handle, std::uint32_t vertex_count);
     void RenderIndexedBuffer(BufferHandle vertex_buffer, BufferHandle index_buffer, std::uint32_t count);
     void EndFrame();
@@ -57,6 +58,9 @@ class Graphics final {
     void CreateCommandPool();
     void CreateCommandBuffer();
     void CreateSignals();
+    void CreateDescriptorSetLayout();
+    void CreateDescriptorPool();
+    void CreateDescriptorSet();
 
     void RecreateSwapChain();
     void CleanupSwapChain();
@@ -94,6 +98,7 @@ class Graphics final {
     BufferHandle CreateBuffer(VkDeviceSize size, VkBufferCreateFlags usage, VkMemoryPropertyFlags properties);
     VkCommandBuffer BeginTransientCommandBuffer();
     void EndTransientCommandBuffer(VkCommandBuffer command_buffer);
+    void CreateUniformBuffers();
 
     VkViewport GetViewport();
     VkRect2D GetScissor();
@@ -122,6 +127,7 @@ class Graphics final {
     VkPipelineLayout pipeline_layout_ = VK_NULL_HANDLE;
     VkRenderPass render_pass_ = VK_NULL_HANDLE;
     VkPipeline pipeline_ = VK_NULL_HANDLE;
+    VkDescriptorSetLayout descriptor_set_layout_ = VK_NULL_HANDLE;
 
     VkCommandPool command_pool_ = VK_NULL_HANDLE;
     VkCommandBuffer command_buffer_ = VK_NULL_HANDLE;
@@ -131,6 +137,11 @@ class Graphics final {
     VkFence still_rendering_fence_ = VK_NULL_HANDLE;
 
     std::uint32_t current_image_index_ = 0;
+
+    VkDescriptorPool descriptor_pool_ = VK_NULL_HANDLE;
+    VkDescriptorSet descriptor_set_ = VK_NULL_HANDLE;
+    BufferHandle uniform_buffer_;
+    void* uniform_buffer_location_;
 
     gsl::not_null<Window*> window_;
     bool validation_enabled_ = false;

@@ -4,6 +4,7 @@
 #include <iostream>
 #include <spdlog/spdlog.h>
 #include <set>
+#include <uniform_transformations.h>
 
 #pragma region VK_FUNCTION_EXT_IMPL
 
@@ -641,6 +642,9 @@ namespace veng {
         layout_info.pushConstantRangeCount = 1;
         layout_info.pPushConstantRanges = &model_matrix_range;
 
+        layout_info.setLayoutCount = 1;
+        layout_info.pSetLayouts = &descriptor_set_layout_;
+
         VkResult layout_result =
             vkCreatePipelineLayout(logical_device_, &layout_info, nullptr, &pipeline_layout_);
         if (layout_result != VK_SUCCESS) {
@@ -831,6 +835,24 @@ namespace veng {
 
         if (vkCreateFence(logical_device_, &fence_info, nullptr, &still_rendering_fence_) !=
             VK_SUCCESS) {
+            std::exit(EXIT_FAILURE);
+        }
+    }
+
+    void Graphics::CreateDescriptorSetLayout() {
+        VkDescriptorSetLayoutBinding uniform_layout_binding = {};
+        uniform_layout_binding.binding = 0;
+        uniform_layout_binding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+        uniform_layout_binding.descriptorCount = 1;
+        uniform_layout_binding.stageFlags = VK_SHADER_STAGE_ALL_GRAPHICS;
+
+        VkDescriptorSetLayoutCreateInfo layout_info = {};
+        layout_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+        layout_info.bindingCount = 1;
+        layout_info.pBindings = &uniform_layout_binding;
+
+        VkResult result = vkCreateDescriptorSetLayout(logical_device_, &layout_info, nullptr, &descriptor_set_layout_);
+        if (result != VK_SUCCESS) {
             std::exit(EXIT_FAILURE);
         }
     }
@@ -1062,6 +1084,7 @@ namespace veng {
 
     void Graphics::RenderBuffer(BufferHandle handle, std::uint32_t vertex_count) {
         VkDeviceSize offset = 0;
+        vkCmdBindDescriptorSets(command_buffer_, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline_layout_, 0, 1, &descriptor_set_, 0, nullptr);
         vkCmdBindVertexBuffers(command_buffer_, 0, 1, &handle.buffer, &offset);
         vkCmdDraw(command_buffer_, vertex_count, 1, 0, 0);
     }
@@ -1069,6 +1092,7 @@ namespace veng {
     void Graphics::RenderIndexedBuffer(
         BufferHandle vertex_buffer, BufferHandle index_buffer, std::uint32_t count) {
         VkDeviceSize offset = 0;
+        vkCmdBindDescriptorSets(command_buffer_, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline_layout_, 0, 1, &descriptor_set_, 0, nullptr);
         vkCmdBindVertexBuffers(command_buffer_, 0, 1, &vertex_buffer.buffer, &offset);
         vkCmdBindIndexBuffer(command_buffer_, index_buffer.buffer, 0, VK_INDEX_TYPE_UINT32);
         vkCmdDrawIndexed(command_buffer_, count, 1, 0, 0, 0);
@@ -1078,6 +1102,11 @@ namespace veng {
     void Graphics::SetModelMatrix(glm::mat4 model) {
         vkCmdPushConstants(
             command_buffer_, pipeline_layout_, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(glm::mat4), &model);
+    }
+
+    void Graphics::SetViewProjection(glm::mat4 view, glm::mat4 projection) {
+        UniformTransformations transformations(view, projection);
+        std::memcpy(uniform_buffer_location_, &transformations, sizeof(UniformTransformations));
     }
 
     VkCommandBuffer Graphics::BeginTransientCommandBuffer() {
@@ -1111,6 +1140,61 @@ namespace veng {
         vkFreeCommandBuffers(logical_device_, command_pool_, 1, &command_buffer);
     }
 
+    void Graphics::CreateUniformBuffers() {
+        VkDeviceSize buffer_size = sizeof(UniformTransformations);
+        uniform_buffer_ = CreateBuffer(buffer_size, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+            VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+
+        vkMapMemory(
+            logical_device_, uniform_buffer_.memory, 0, buffer_size, 0, &uniform_buffer_location_);
+    }
+
+    void Graphics::CreateDescriptorPool() {
+        VkDescriptorPoolSize pool_size = {};
+        pool_size.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+        pool_size.descriptorCount = 1;
+
+        VkDescriptorPoolCreateInfo create_info = {};
+        create_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+        create_info.poolSizeCount = 1;
+        create_info.pPoolSizes = &pool_size;
+        create_info.maxSets = 1;
+
+        VkResult result = vkCreateDescriptorPool(logical_device_, &create_info, nullptr, &descriptor_pool_);
+        if (result != VK_SUCCESS) {
+            std::exit(EXIT_FAILURE);
+        }
+    }
+
+    void Graphics::CreateDescriptorSet() {
+        VkDescriptorSetAllocateInfo set_info = {};
+        set_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+        set_info.descriptorPool = descriptor_pool_;
+        set_info.descriptorSetCount = 1;
+        set_info.pSetLayouts = &descriptor_set_layout_;
+
+        VkResult result = vkAllocateDescriptorSets(logical_device_, &set_info, &descriptor_set_);
+        if (result != VK_SUCCESS) {
+            std::exit(EXIT_FAILURE);
+        }
+
+        VkDescriptorBufferInfo buffer_info = {};
+        buffer_info.buffer = uniform_buffer_.buffer;
+        buffer_info.offset = 0;
+        buffer_info.range = sizeof(UniformTransformations);
+
+        VkWriteDescriptorSet descriptor_write = {};
+        descriptor_write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        descriptor_write.dstSet = descriptor_set_;
+        descriptor_write.dstBinding = 0;
+        descriptor_write.dstArrayElement = 0;
+        descriptor_write.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+        descriptor_write.descriptorCount = 1;
+        descriptor_write.pBufferInfo = &buffer_info;
+
+        vkUpdateDescriptorSets(logical_device_, 1, &descriptor_write, 0, nullptr);
+    }
+
     #pragma endregion
 
     #pragma region CLASS
@@ -1130,6 +1214,16 @@ namespace veng {
             vkDeviceWaitIdle(logical_device_);
 
             CleanupSwapChain();
+
+            if (descriptor_pool_ != VK_NULL_HANDLE) {
+                vkDestroyDescriptorPool(logical_device_, descriptor_pool_, nullptr);
+            }
+
+            DestroyBuffer(uniform_buffer_);
+
+            if (descriptor_set_layout_ != VK_NULL_HANDLE) {
+                vkDestroyDescriptorSetLayout(logical_device_, descriptor_set_layout_, nullptr);
+            }
 
             if (image_available_signal_ != VK_NULL_HANDLE) {
                 vkDestroySemaphore(logical_device_, image_available_signal_, nullptr);
@@ -1185,11 +1279,15 @@ namespace veng {
         CreateSwapChain();
         CreateImageViews();
         CreateRenderPass();
+        CreateDescriptorSetLayout();
         CreateGraphicsPipeline();
         CreateFramebuffers();
         CreateCommandPool();
         CreateCommandBuffer();
         CreateSignals();
+        CreateUniformBuffers();
+        CreateDescriptorPool();
+        CreateDescriptorSet();
     }
 
     #pragma endregion

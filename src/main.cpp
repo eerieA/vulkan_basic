@@ -15,16 +15,17 @@ std::int32_t main(std::int32_t argc, gsl::zstring* argv) {
 
     veng::Graphics graphics(&window);
 
-    std::array<veng::Vertex, 3> vertices = {
-        veng::Vertex{glm::vec3{0.0f, -0.5f, 0.0f}, glm::vec3{1.0f, 0.0f, 0.0f}},
-        veng::Vertex{glm::vec3{0.5f, 0.5f, 0.0f}, glm::vec3{0.0f, 1.0f, 0.0f}},
-        veng::Vertex{glm::vec3{-0.5f, 0.5f, 0.0f}, glm::vec3{0.0f, 0.0f, 1.0f}},
+    std::array<veng::Vertex, 4> vertices = {
+        veng::Vertex{{-0.5f, -0.5f, 0.0f}, {0.0f, 1.0f}},   // top - left
+        veng::Vertex{{0.5f, -0.5f, 0.0f}, {1.0f, 1.0f}},   // top - right
+        veng::Vertex{{-0.5f, 0.5f, 0.0f}, {0.0f, 0.0f}},   // bottom - left
+        veng::Vertex{{0.5f, 0.5f, 0.0f}, {1.0f, 0.0f}},   // bottom - right
     };
 
     veng::BufferHandle buffer = graphics.CreateVertexBuffer(vertices);
 
-    std::array<std::uint32_t, 3> indices = {
-        0, 1, 2
+    std::array<std::uint32_t, 6> indices = {
+        0, 3, 2, 0, 1, 3
     };
 
     veng::BufferHandle index_buffer = graphics.CreateIndexBuffer(indices);

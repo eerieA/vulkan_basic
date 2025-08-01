@@ -5,8 +5,12 @@
 namespace veng {
 	struct Vertex
 	{
+
+		Vertex() : position(glm::vec3(0.0f)), uv(glm::vec2(0.0f)) {}
+		Vertex(glm::vec3 _position, glm::vec2 _uv) : position(_position), uv(_uv) {}
+
 		glm::vec3 position;
-		glm::vec3 color;
+		glm::vec2 uv;
 
 		static VkVertexInputBindingDescription GetBindingDescription() {
 			VkVertexInputBindingDescription description = {};
@@ -27,8 +31,8 @@ namespace veng {
 
 			description[1].binding = 0;
 			description[1].location = 1;
-			description[1].format = VK_FORMAT_R32G32B32_SFLOAT;
-			description[1].offset = offsetof(Vertex, color);
+			description[1].format = VK_FORMAT_R32G32_SFLOAT;
+			description[1].offset = offsetof(Vertex, uv);
 
 			return description;
 		}

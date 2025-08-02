@@ -643,7 +643,7 @@ namespace veng {
         layout_info.pPushConstantRanges = &model_matrix_range;
 
         layout_info.setLayoutCount = 1;
-        layout_info.pSetLayouts = &descriptor_set_layout_;
+        layout_info.pSetLayouts = &uniform_set_layout_;
 
         VkResult layout_result =
             vkCreatePipelineLayout(logical_device_, &layout_info, nullptr, &pipeline_layout_);
@@ -835,24 +835,6 @@ namespace veng {
 
         if (vkCreateFence(logical_device_, &fence_info, nullptr, &still_rendering_fence_) !=
             VK_SUCCESS) {
-            std::exit(EXIT_FAILURE);
-        }
-    }
-
-    void Graphics::CreateDescriptorSetLayout() {
-        VkDescriptorSetLayoutBinding uniform_layout_binding = {};
-        uniform_layout_binding.binding = 0;
-        uniform_layout_binding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-        uniform_layout_binding.descriptorCount = 1;
-        uniform_layout_binding.stageFlags = VK_SHADER_STAGE_ALL_GRAPHICS;
-
-        VkDescriptorSetLayoutCreateInfo layout_info = {};
-        layout_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-        layout_info.bindingCount = 1;
-        layout_info.pBindings = &uniform_layout_binding;
-
-        VkResult result = vkCreateDescriptorSetLayout(logical_device_, &layout_info, nullptr, &descriptor_set_layout_);
-        if (result != VK_SUCCESS) {
             std::exit(EXIT_FAILURE);
         }
     }
@@ -1084,7 +1066,7 @@ namespace veng {
 
     void Graphics::RenderBuffer(BufferHandle handle, std::uint32_t vertex_count) {
         VkDeviceSize offset = 0;
-        vkCmdBindDescriptorSets(command_buffer_, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline_layout_, 0, 1, &descriptor_set_, 0, nullptr);
+        vkCmdBindDescriptorSets(command_buffer_, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline_layout_, 0, 1, &uniform_set_, 0, nullptr);
         vkCmdBindVertexBuffers(command_buffer_, 0, 1, &handle.buffer, &offset);
         vkCmdDraw(command_buffer_, vertex_count, 1, 0, 0);
     }
@@ -1092,7 +1074,7 @@ namespace veng {
     void Graphics::RenderIndexedBuffer(
         BufferHandle vertex_buffer, BufferHandle index_buffer, std::uint32_t count) {
         VkDeviceSize offset = 0;
-        vkCmdBindDescriptorSets(command_buffer_, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline_layout_, 0, 1, &descriptor_set_, 0, nullptr);
+        vkCmdBindDescriptorSets(command_buffer_, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline_layout_, 0, 1, &uniform_set_, 0, nullptr);
         vkCmdBindVertexBuffers(command_buffer_, 0, 1, &vertex_buffer.buffer, &offset);
         vkCmdBindIndexBuffer(command_buffer_, index_buffer.buffer, 0, VK_INDEX_TYPE_UINT32);
         vkCmdDrawIndexed(command_buffer_, count, 1, 0, 0, 0);
@@ -1149,31 +1131,79 @@ namespace veng {
             logical_device_, uniform_buffer_.memory, 0, buffer_size, 0, &uniform_buffer_location_);
     }
 
-    void Graphics::CreateDescriptorPool() {
-        VkDescriptorPoolSize pool_size = {};
-        pool_size.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-        pool_size.descriptorCount = 1;
+    void Graphics::CreateDescriptorSetLayouts() {
+        VkDescriptorSetLayoutBinding uniform_layout_binding = {};
+        uniform_layout_binding.binding = 0;
+        uniform_layout_binding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+        uniform_layout_binding.descriptorCount = 1;
+        uniform_layout_binding.stageFlags = VK_SHADER_STAGE_ALL_GRAPHICS;
 
-        VkDescriptorPoolCreateInfo create_info = {};
-        create_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-        create_info.poolSizeCount = 1;
-        create_info.pPoolSizes = &pool_size;
-        create_info.maxSets = 1;
+        VkDescriptorSetLayoutCreateInfo uniform_layout_info = {};
+        uniform_layout_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+        uniform_layout_info.bindingCount = 1;
+        uniform_layout_info.pBindings = &uniform_layout_binding;
 
-        VkResult result = vkCreateDescriptorPool(logical_device_, &create_info, nullptr, &descriptor_pool_);
-        if (result != VK_SUCCESS) {
+        if (vkCreateDescriptorSetLayout(logical_device_, &uniform_layout_info, nullptr, &uniform_set_layout_) != VK_SUCCESS) {
+            std::exit(EXIT_FAILURE);
+        }
+
+        VkDescriptorSetLayoutBinding texture_layout_binding = {};
+        texture_layout_binding.binding = 0;
+        texture_layout_binding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+        texture_layout_binding.descriptorCount = 1;
+        texture_layout_binding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+
+        VkDescriptorSetLayoutCreateInfo texture_layout_info = {};
+        texture_layout_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+        texture_layout_info.bindingCount = 1;
+        texture_layout_info.pBindings = &texture_layout_binding;
+
+        if (vkCreateDescriptorSetLayout(logical_device_, &texture_layout_info, nullptr, &texture_set_layout_) != VK_SUCCESS) {
             std::exit(EXIT_FAILURE);
         }
     }
 
-    void Graphics::CreateDescriptorSet() {
+    void Graphics::CreateDescriptorPools() {
+        VkDescriptorPoolSize uniform_pool_size = {};
+        uniform_pool_size.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+        uniform_pool_size.descriptorCount = 1;
+
+        VkDescriptorPoolCreateInfo uniform_pool_info = {};
+        uniform_pool_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+        uniform_pool_info.poolSizeCount = 1;
+        uniform_pool_info.pPoolSizes = &uniform_pool_size;
+        uniform_pool_info.maxSets = 1;
+
+        if (vkCreateDescriptorPool(logical_device_, &uniform_pool_info, nullptr, &uniform_pool_) != VK_SUCCESS) {
+            std::exit(EXIT_FAILURE);
+        }
+
+        VkPhysicalDeviceProperties properties = {};
+        vkGetPhysicalDeviceProperties(physical_device_, &properties);
+
+        VkDescriptorPoolSize texture_pool_size = {};
+        texture_pool_size.type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+        texture_pool_size.descriptorCount = 1024;
+
+        VkDescriptorPoolCreateInfo texture_pool_info = {};
+        texture_pool_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+        texture_pool_info.poolSizeCount = 1;
+        texture_pool_info.pPoolSizes = &texture_pool_size;
+        texture_pool_info.maxSets = 1024;
+
+        if (vkCreateDescriptorPool(logical_device_, &texture_pool_info, nullptr, &texture_pool_) != VK_SUCCESS) {
+            std::exit(EXIT_FAILURE);
+        }
+    }
+
+    void Graphics::CreateDescriptorSets() {
         VkDescriptorSetAllocateInfo set_info = {};
         set_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-        set_info.descriptorPool = descriptor_pool_;
+        set_info.descriptorPool = uniform_pool_;
         set_info.descriptorSetCount = 1;
-        set_info.pSetLayouts = &descriptor_set_layout_;
+        set_info.pSetLayouts = &uniform_set_layout_;
 
-        VkResult result = vkAllocateDescriptorSets(logical_device_, &set_info, &descriptor_set_);
+        VkResult result = vkAllocateDescriptorSets(logical_device_, &set_info, &uniform_set_);
         if (result != VK_SUCCESS) {
             std::exit(EXIT_FAILURE);
         }
@@ -1185,7 +1215,7 @@ namespace veng {
 
         VkWriteDescriptorSet descriptor_write = {};
         descriptor_write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-        descriptor_write.dstSet = descriptor_set_;
+        descriptor_write.dstSet = uniform_set_;
         descriptor_write.dstBinding = 0;
         descriptor_write.dstArrayElement = 0;
         descriptor_write.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
@@ -1215,14 +1245,22 @@ namespace veng {
 
             CleanupSwapChain();
 
-            if (descriptor_pool_ != VK_NULL_HANDLE) {
-                vkDestroyDescriptorPool(logical_device_, descriptor_pool_, nullptr);
+            if (uniform_pool_ != VK_NULL_HANDLE) {
+                vkDestroyDescriptorPool(logical_device_, uniform_pool_, nullptr);
+            }
+
+            if (texture_pool_ != VK_NULL_HANDLE) {
+                vkDestroyDescriptorPool(logical_device_, texture_pool_, nullptr);
             }
 
             DestroyBuffer(uniform_buffer_);
 
-            if (descriptor_set_layout_ != VK_NULL_HANDLE) {
-                vkDestroyDescriptorSetLayout(logical_device_, descriptor_set_layout_, nullptr);
+            if (uniform_set_layout_ != VK_NULL_HANDLE) {
+                vkDestroyDescriptorSetLayout(logical_device_, uniform_set_layout_, nullptr);
+            }
+
+            if (texture_set_layout_ != VK_NULL_HANDLE) {
+                vkDestroyDescriptorSetLayout(logical_device_, texture_set_layout_, nullptr);
             }
 
             if (image_available_signal_ != VK_NULL_HANDLE) {
@@ -1279,15 +1317,15 @@ namespace veng {
         CreateSwapChain();
         CreateImageViews();
         CreateRenderPass();
-        CreateDescriptorSetLayout();
+        CreateDescriptorSetLayouts();
         CreateGraphicsPipeline();
         CreateFramebuffers();
         CreateCommandPool();
         CreateCommandBuffer();
         CreateSignals();
         CreateUniformBuffers();
-        CreateDescriptorPool();
-        CreateDescriptorSet();
+        CreateDescriptorPools();
+        CreateDescriptorSets();
     }
 
     #pragma endregion

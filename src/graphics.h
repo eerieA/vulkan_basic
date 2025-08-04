@@ -61,6 +61,7 @@ class Graphics final {
     void CreateDescriptorSetLayouts();
     void CreateDescriptorPools();
     void CreateDescriptorSets();
+    void CreateTextureSampler();
 
     void RecreateSwapChain();
     void CleanupSwapChain();
@@ -145,6 +146,7 @@ class Graphics final {
 
     VkDescriptorSetLayout texture_set_layout_ = VK_NULL_HANDLE;
     VkDescriptorPool texture_pool_ = VK_NULL_HANDLE;
+    VkSampler texture_sampler_ = VK_NULL_HANDLE;
 
     gsl::not_null<Window*> window_;
     bool validation_enabled_ = false;

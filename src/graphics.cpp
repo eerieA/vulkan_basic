@@ -1227,6 +1227,34 @@ namespace veng {
 
     #pragma endregion
 
+    #pragma region TEXTURE
+
+    void Graphics::CreateTextureSampler() {
+        VkSamplerCreateInfo sampler_info = {};
+        sampler_info.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+        sampler_info.magFilter = VK_FILTER_LINEAR;
+        sampler_info.minFilter = VK_FILTER_LINEAR;
+        sampler_info.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+        sampler_info.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+        sampler_info.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+        sampler_info.anisotropyEnable = VK_FALSE;
+        sampler_info.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK;
+        sampler_info.unnormalizedCoordinates = VK_FALSE;
+        sampler_info.compareEnable = VK_FALSE;
+        sampler_info.compareOp = VK_COMPARE_OP_ALWAYS;
+        sampler_info.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+        sampler_info.mipLodBias = 0.0f;
+        sampler_info.minLod = 0.0f;
+        sampler_info.maxLod = 0.0f;
+        sampler_info.maxAnisotropy = 1.0f;
+
+        if (vkCreateSampler(logical_device_, &sampler_info, nullptr, &texture_sampler_) != VK_SUCCESS) {
+            std::exit(EXIT_FAILURE);
+        }
+    }
+
+    #pragma endregion
+
     #pragma region CLASS
 
     Graphics::Graphics(gsl::not_null<Window*> window) : window_(window) {
@@ -1245,22 +1273,26 @@ namespace veng {
 
             CleanupSwapChain();
 
-            if (uniform_pool_ != VK_NULL_HANDLE) {
-                vkDestroyDescriptorPool(logical_device_, uniform_pool_, nullptr);
-            }
-
             if (texture_pool_ != VK_NULL_HANDLE) {
                 vkDestroyDescriptorPool(logical_device_, texture_pool_, nullptr);
+            }
+
+            if (texture_set_layout_ != VK_NULL_HANDLE) {
+                vkDestroyDescriptorSetLayout(logical_device_, texture_set_layout_, nullptr);
+            }
+
+            if (texture_sampler_ != VK_NULL_HANDLE) {
+                vkDestroySampler(logical_device_, texture_sampler_, nullptr);
+            }
+
+            if (uniform_pool_ != VK_NULL_HANDLE) {
+                vkDestroyDescriptorPool(logical_device_, uniform_pool_, nullptr);
             }
 
             DestroyBuffer(uniform_buffer_);
 
             if (uniform_set_layout_ != VK_NULL_HANDLE) {
                 vkDestroyDescriptorSetLayout(logical_device_, uniform_set_layout_, nullptr);
-            }
-
-            if (texture_set_layout_ != VK_NULL_HANDLE) {
-                vkDestroyDescriptorSetLayout(logical_device_, texture_set_layout_, nullptr);
             }
 
             if (image_available_signal_ != VK_NULL_HANDLE) {
@@ -1326,6 +1358,7 @@ namespace veng {
         CreateUniformBuffers();
         CreateDescriptorPools();
         CreateDescriptorSets();
+        CreateTextureSampler();
     }
 
     #pragma endregion

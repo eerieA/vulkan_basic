@@ -5,6 +5,7 @@
 #include <glfw_window.h>
 #include <vertex.h>
 #include <buffer_handle.h>
+#include <texture_handle.h>
 
 namespace veng {
     
@@ -16,6 +17,7 @@ class Graphics final {
     bool BeginFrame();
     void SetModelMatrix(glm::mat4 model);
     void SetViewProjection(glm::mat4 view, glm::mat4 projection);
+    void SetTexture(TextureHandle handle);
     void RenderBuffer(BufferHandle handle, std::uint32_t vertex_count);
     void RenderIndexedBuffer(BufferHandle vertex_buffer, BufferHandle index_buffer, std::uint32_t count);
     void EndFrame();
@@ -23,6 +25,8 @@ class Graphics final {
     BufferHandle CreateVertexBuffer(gsl::span<Vertex> vertices);
     BufferHandle CreateIndexBuffer(gsl::span<std::uint32_t> indices);
     void DestroyBuffer(BufferHandle handle);
+    TextureHandle CreateTexture(gsl::czstring path);
+    void DestroyTexture(TextureHandle handle);
 
     private:
 
@@ -100,6 +104,11 @@ class Graphics final {
     VkCommandBuffer BeginTransientCommandBuffer();
     void EndTransientCommandBuffer(VkCommandBuffer command_buffer);
     void CreateUniformBuffers();
+
+    TextureHandle CreateImage(glm::ivec2 size, VkBufferCreateFlags usage, VkMemoryPropertyFlags properties);
+    void TransitionImageLayout(VkImage image, VkImageLayout old_layout, VkImageLayout new_layout);
+    void CopyBufferToImage(VkBuffer buffer, VkImage image, glm::ivec2 image_size);
+    VkImageView CreateImageView(VkImage image, VkFormat format);
 
     VkViewport GetViewport();
     VkRect2D GetScissor();

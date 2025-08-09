@@ -66,6 +66,7 @@ class Graphics final {
     void CreateDescriptorPools();
     void CreateDescriptorSets();
     void CreateTextureSampler();
+    void CreateDepthResources();
 
     void RecreateSwapChain();
     void CleanupSwapChain();
@@ -105,10 +106,10 @@ class Graphics final {
     void EndTransientCommandBuffer(VkCommandBuffer command_buffer);
     void CreateUniformBuffers();
 
-    TextureHandle CreateImage(glm::ivec2 size, VkBufferCreateFlags usage, VkMemoryPropertyFlags properties);
-    void TransitionImageLayout(VkImage image, VkImageLayout old_layout, VkImageLayout new_layout);
+    TextureHandle CreateImage(glm::ivec2 size, VkFormat image_format, VkBufferCreateFlags usage, VkMemoryPropertyFlags properties);
+    void TransitionImageLayout(VkImage image, VkFormat format, VkImageLayout old_layout, VkImageLayout new_layout);
     void CopyBufferToImage(VkBuffer buffer, VkImage image, glm::ivec2 image_size);
-    VkImageView CreateImageView(VkImage image, VkFormat format);
+    VkImageView CreateImageView(VkImage image, VkFormat format, VkImageAspectFlags aspect_flag);
 
     VkViewport GetViewport();
     VkRect2D GetScissor();
@@ -156,6 +157,7 @@ class Graphics final {
     VkDescriptorSetLayout texture_set_layout_ = VK_NULL_HANDLE;
     VkDescriptorPool texture_pool_ = VK_NULL_HANDLE;
     VkSampler texture_sampler_ = VK_NULL_HANDLE;
+    TextureHandle depth_texture_;
 
     gsl::not_null<Window*> window_;
     bool validation_enabled_ = false;
